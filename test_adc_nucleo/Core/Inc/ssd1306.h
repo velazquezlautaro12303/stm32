@@ -78,6 +78,8 @@ typedef enum {
 } SSD1306_COLOR_t;
 
 
+uint8_t SSD1306_PutIntU(uint8_t X, uint8_t Y, uint32_t num, FontDef_t* Font);
+
 
 /**
  * @brief  Initializes SSD1306 LCD

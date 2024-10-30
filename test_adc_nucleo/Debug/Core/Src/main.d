@@ -49,7 +49,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/include/event_groups.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/include/timers.h \
  ../Core/Inc/ssd1306.h ../Core/Inc/fonts.h ../Core/Inc/fonts.h \
- /home/xxx/Escritorio/test_adc_nucleo/Drivers/CMSIS/DSP_libraries/Include/arm_math.h \
+ /home/xxx/Escritorio/stm32/test_adc_nucleo/Drivers/CMSIS/DSP_libraries/Include/arm_math.h \
  ../Drivers/CMSIS/Include/cmsis_compiler.h
 ../Core/Inc/main.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
@@ -104,5 +104,5 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Core/Inc/ssd1306.h:
 ../Core/Inc/fonts.h:
 ../Core/Inc/fonts.h:
-/home/xxx/Escritorio/test_adc_nucleo/Drivers/CMSIS/DSP_libraries/Include/arm_math.h:
+/home/xxx/Escritorio/stm32/test_adc_nucleo/Drivers/CMSIS/DSP_libraries/Include/arm_math.h:
 ../Drivers/CMSIS/Include/cmsis_compiler.h:

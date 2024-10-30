@@ -26,6 +26,8 @@
 #include "ssd1306.h"
 #include "fonts.h"
 #include "arm_math.h"
+#include "queue.h"
+#include "task.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -35,8 +37,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define FFT_SIZE 4096  // Tamaño de la FFT (debe ser una potencia de 2)
-#define SAMPLE_RATE 4000000  // Frecuencia de muestreo (en Hz)
+#define FFT_SIZE 32  // Tamaño de la FFT (debe ser una potencia de 2)
+#define SAMPLE_RATE 8000  // Frecuencia de muestreo (en Hz)
 
 /* USER CODE END PD */
 
@@ -48,13 +50,20 @@
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
 DMA_HandleTypeDef hdma_adc1;
-
+//volatile uint8_t convCompleted = 0;
 I2C_HandleTypeDef hi2c1;
 
 osThreadId defaultTaskHandle;
 
 float32_t input_signal[FFT_SIZE];  // Buffer para almacenar las muestras ADC
 float32_t fft_output[FFT_SIZE];  // Buffer para almacenar los resultados de la FFT
+
+QueueHandle_t cola;
+
+uint16_t buffer[FFT_SIZE] = {2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0};
+uint16_t rawValues[FFT_SIZE];
+
+uint32_t i = 0;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -66,6 +75,7 @@ static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
 void StartDefaultTask(void const * argument);
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc);
 
 /* USER CODE BEGIN PFP */
 
@@ -73,12 +83,6 @@ void StartDefaultTask(void const * argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-#define LEN_BUFFER 4096
-uint16_t buffer[FFT_SIZE] = { 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,  16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
-uint16_t rawValues[LEN_BUFFER];
-
-
-
 /* USER CODE END 0 */
 
 /**
@@ -133,6 +137,7 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
+  cola=xQueueCreate(1, sizeof(uint32_t));
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -221,7 +226,7 @@ static void MX_ADC1_Init(void)
   hadc1.Instance = ADC1;
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc1.Init.ScanConvMode = ENABLE;
+  hadc1.Init.ScanConvMode = DISABLE;
   hadc1.Init.ContinuousConvMode = ENABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
@@ -356,57 +361,66 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
   //char snum[5];
-  char* get_note_from_frequency(uint32_t frequency) {
-	  if (frequency >= 0 && frequency <= 100) return "CONTINUA";
-      if (frequency >= 261 && frequency <= 277) return "C";
+  char get_note_from_frequency(uint32_t frequency) {
+      if (frequency >= 261 && frequency <= 277) return 'C';
 
-      if (frequency >= 294 && frequency <= 311) return "D";
+      if (frequency >= 294 && frequency <= 311) return 'D';
 
-      if (frequency >= 330 && frequency <= 349) return "E";
-      if (frequency >= 350 && frequency <= 369) return "F";
+      if (frequency >= 330 && frequency <= 349) return 'E';
 
-      if (frequency >= 393 && frequency <= 415) return "G";
+      if (frequency >= 350 && frequency <= 369) return 'F';
 
-      if (frequency >= 441 && frequency <= 466) return "A";
+      if (frequency >= 393 && frequency <= 415) return 'G';
 
-      if (frequency >= 494 && frequency <= 523) return "B";
-      return "Unknown";
+      if (frequency >= 441 && frequency <= 466) return 'A';
+
+      if (frequency >= 494 && frequency <= 523) return 'B';
+
+      return '-';
   }
-  uint32_t calculate_fft_and_find_frequency(uint16_t *buffer, uint32_t buffer_size) {
-      arm_rfft_fast_instance_f32 S;
-      float32_t maxValue;
-      uint32_t maxIndex;
 
-      // Inicialización de la FFT
-      arm_rfft_fast_init_f32(&S, FFT_SIZE);
+uint32_t calculate_fft_and_find_frequency(uint16_t *buffer, uint32_t buffer_size) {
+	arm_rfft_fast_instance_f32 S;
+	float32_t maxValue, mean;
+	uint32_t maxIndex;
 
-      // Copiar las muestras del ADC (convertirlas de enteros a flotantes)
-      for (uint32_t i = 0; i < FFT_SIZE; i++) {
-//          input_signal[i] = (float32_t)(buffer[i] - 2048);  // Centramos la señal ADC en 0
-    	  input_signal[i] = (float32_t)buffer[i]-1500;
-      }
+	// Inicialización de la FFT
+	arm_rfft_fast_init_f32(&S, buffer_size);
 
-//      float32_t input_signal[FFT_SIZE] = {
-//          0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f,
-//          8.0f, 9.0f, 10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f,
-//          16.0f, 17.0f, 18.0f, 19.0f, 20.0f, 21.0f, 22.0f, 23.0f,
-//          24.0f, 25.0f, 26.0f, 27.0f, 28.0f, 29.0f, 30.0f, 31.0f
-//      };
+	// Copiar las muestras del ADC (convertirlas de enteros a flotantes)
+	for (uint32_t i = 0; i < buffer_size; i++) {
+	  input_signal[i] = (float32_t)buffer[i];
+	}
 
-      // Realizar la FFT
-      arm_rfft_fast_f32(&S, input_signal, fft_output, 0);
+	arm_mean_f32(input_signal, buffer_size, &mean);
 
-      // Calcular la magnitud (sólo necesitamos la parte real)
-      arm_cmplx_mag_f32(fft_output, fft_output, FFT_SIZE / 2);
+	for (uint32_t i = 0; i < buffer_size; i++) {
+	  input_signal[i] = input_signal[i] - mean;
+	}
 
-      // Encontrar el índice con el valor más alto en el espectro de la FFT
-      arm_max_f32(fft_output, FFT_SIZE / 2, &maxValue, &maxIndex);
+	// Realizar la FFT
+	arm_rfft_fast_f32(&S, input_signal, fft_output, 0);
 
-      // Calcular la frecuencia dominante
-      uint32_t frequency = (maxIndex * SAMPLE_RATE) / FFT_SIZE;
+	// Calcular la magnitud (sólo necesitamos la parte real)
+	arm_cmplx_mag_f32(fft_output, fft_output, buffer_size / 2);
 
-      return frequency;
-  }
+	// Encontrar el índice con el valor más alto en el espectro de la FFT
+	arm_max_f32(fft_output, buffer_size / 2, &maxValue, &maxIndex);
+
+	// Calcular la frecuencia dominante
+	return (maxIndex * SAMPLE_RATE) / buffer_size;
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
+	uint32_t dato = calculate_fft_and_find_frequency(buffer, FFT_SIZE);
+
+	BaseType_t xHigherPriorityTaskWoken;
+	xQueueSendFromISR(cola, &dato, &xHigherPriorityTaskWoken);
+//    vTaskNotifyGiveFromISR(defaultTaskHandle, &xHigherPriorityTaskWoken);
+
+	// Realiza un cambio de contexto si se desbloqueó una tarea de mayor prioridad
+	portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -418,37 +432,28 @@ static void MX_GPIO_Init(void)
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void const * argument)
 {
+	uint32_t dato;
   /* USER CODE BEGIN 5 */
-	 SSD1306_Init();
+	SSD1306_Init();
 
   /* Infinite loop */
-	uint32_t frequency;
+	HAL_ADC_Start_DMA(&hadc1, (uint32_t*)rawValues, LEN_BUFFER);
 
 	for(;;)
 	{
-		HAL_ADC_Start_DMA(&hadc1, (uint32_t*)buffer, FFT_SIZE);
+//		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+		xQueueReceive(cola, &dato, portMAX_DELAY);
 
-		// Calcular la frecuencia utilizando la FFT
-		frequency = calculate_fft_and_find_frequency(buffer, FFT_SIZE);
-
-		// Mapear la frecuencia a una nota musical
-		char* note = get_note_from_frequency(frequency);
-
+		SSD1306_GotoXY (0,30);
+		SSD1306_PutIntU(0, 0, i++, &Font_11x18);
 		SSD1306_GotoXY (0,0);
-		SSD1306_Puts ("Frecuencia: ", &Font_11x18, 1);
-
-		SSD1306_GotoXY (0, 30);
-		char output[20] = "";
-		 // Convertir float a char* con 2 decimales de precisión
-		sprintf(output, "%.2i", (int)frequency);
-
-		SSD1306_Puts(output, &Font_11x18, 1);
-//		SSD1306_Puts (note, &Font_11x18, 1);
+		SSD1306_Puts("Freq: ", &Font_11x18, SSD1306_COLOR_WHITE);
+		SSD1306_GotoXY (60,0);
+		SSD1306_Putc(get_note_from_frequency(dato), &Font_11x18, SSD1306_COLOR_WHITE);
 		SSD1306_UpdateScreen();
-		osDelay (1000);
+
+		HAL_ADC_Start_DMA(&hadc1, (uint32_t*)rawValues, LEN_BUFFER);
 	}
-
-
   /* USER CODE END 5 */
 }
 

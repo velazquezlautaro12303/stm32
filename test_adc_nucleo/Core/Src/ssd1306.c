@@ -155,6 +155,22 @@ void SSD1306_DrawBitmap(int16_t x, int16_t y, const unsigned char* bitmap, int16
 }
 
 
+uint8_t SSD1306_PutIntU(uint8_t X, uint8_t Y, uint32_t num, FontDef_t* Font) {
+	uint8_t str[11]; // 10 chars max for UINT32_MAX
+	uint8_t *pStr = str;
+	uint8_t pX = X;
+
+	// String termination character
+	*pStr++ = '\0';
+
+	// Convert number to characters
+	do { *pStr++ = (num % 10) + '0'; } while (num /= 10);
+
+	// Draw a number
+	while (*--pStr) pX += SSD1306_Putc(*pStr,Font, 1);
+
+	return (pX - X);
+}
 
 
 
