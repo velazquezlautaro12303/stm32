@@ -37,7 +37,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define FFT_SIZE 32  // Tamaño de la FFT (debe ser una potencia de 2)
+#define FFT_SIZE 2048  // Tamaño de la FFT (debe ser una potencia de 2)
 #define SAMPLE_RATE 8000  // Frecuencia de muestreo (en Hz)
 
 /* USER CODE END PD */
@@ -412,7 +412,7 @@ uint32_t calculate_fft_and_find_frequency(uint16_t *buffer, uint32_t buffer_size
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
-	uint32_t dato = calculate_fft_and_find_frequency(buffer, FFT_SIZE);
+	uint32_t dato = calculate_fft_and_find_frequency(rawValues, FFT_SIZE);
 
 	BaseType_t xHigherPriorityTaskWoken;
 	xQueueSendFromISR(cola, &dato, &xHigherPriorityTaskWoken);
@@ -437,7 +437,7 @@ void StartDefaultTask(void const * argument)
 	SSD1306_Init();
 
   /* Infinite loop */
-	HAL_ADC_Start_DMA(&hadc1, (uint32_t*)rawValues, LEN_BUFFER);
+	HAL_ADC_Start_DMA(&hadc1, (uint32_t*)rawValues, FFT_SIZE);
 
 	for(;;)
 	{
@@ -452,7 +452,7 @@ void StartDefaultTask(void const * argument)
 		SSD1306_Putc(get_note_from_frequency(dato), &Font_11x18, SSD1306_COLOR_WHITE);
 		SSD1306_UpdateScreen();
 
-		HAL_ADC_Start_DMA(&hadc1, (uint32_t*)rawValues, LEN_BUFFER);
+		HAL_ADC_Start_DMA(&hadc1, (uint32_t*)rawValues, FFT_SIZE);
 	}
   /* USER CODE END 5 */
 }
