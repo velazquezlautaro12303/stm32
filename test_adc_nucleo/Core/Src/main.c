@@ -20,7 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
-#include <string.h>
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "ssd1306.h"
@@ -38,22 +38,23 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define FFT_SIZE 2048  // Tamaño de la FFT (debe ser una potencia de 2)
-#define SAMPLE_RATE 8000  // Frecuencia de muestreo (en Hz)
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+#define PRESCALER_ADC() ((ADC->CCR & ADC_CCR_ADCPRE) >> ADC_CCR_ADCPRE_Pos)
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
 DMA_HandleTypeDef hdma_adc1;
-//volatile uint8_t convCompleted = 0;
+
 I2C_HandleTypeDef hi2c1;
 
 osThreadId defaultTaskHandle;
+/* USER CODE BEGIN PV */
+
+//volatile uint8_t convCompleted = 0;
 
 float32_t input_signal[FFT_SIZE];  // Buffer para almacenar las muestras ADC
 float32_t fft_output[FFT_SIZE];  // Buffer para almacenar los resultados de la FFT
@@ -64,7 +65,7 @@ uint16_t buffer[FFT_SIZE] = {2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 
 uint16_t rawValues[FFT_SIZE];
 
 uint32_t i = 0;
-/* USER CODE BEGIN PV */
+uint32_t sampleRate;
 
 /* USER CODE END PV */
 
@@ -75,7 +76,6 @@ static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
 void StartDefaultTask(void const * argument);
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc);
 
 /* USER CODE BEGIN PFP */
 
@@ -116,11 +116,9 @@ int main(void)
   MX_DMA_Init();
   MX_ADC1_Init();
   MX_I2C1_Init();
-  //SSD1306_Init();
+
   /* USER CODE BEGIN 2 */
-
-
-
+  sampleRate = HAL_RCC_GetPCLK2Freq() / PRESCALER_ADC();
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -193,7 +191,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV2;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
@@ -224,9 +222,9 @@ static void MX_ADC1_Init(void)
   /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
   */
   hadc1.Instance = ADC1;
-  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV8;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc1.Init.ScanConvMode = DISABLE;
+  hadc1.Init.ScanConvMode = ENABLE;
   hadc1.Init.ContinuousConvMode = ENABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
@@ -408,7 +406,7 @@ uint32_t calculate_fft_and_find_frequency(uint16_t *buffer, uint32_t buffer_size
 	arm_max_f32(fft_output, buffer_size / 2, &maxValue, &maxIndex);
 
 	// Calcular la frecuencia dominante
-	return (maxIndex * SAMPLE_RATE) / buffer_size;
+	return (maxIndex * sampleRate) / buffer_size;
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
@@ -432,8 +430,8 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void const * argument)
 {
-	uint32_t dato;
   /* USER CODE BEGIN 5 */
+	uint32_t dato;
 	SSD1306_Init();
 
   /* Infinite loop */
