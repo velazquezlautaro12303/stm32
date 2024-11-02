@@ -42,7 +42,7 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-#define PRESCALER_ADC() ((ADC->CCR & ADC_CCR_ADCPRE) >> ADC_CCR_ADCPRE_Pos)
+
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -118,7 +118,20 @@ int main(void)
   MX_I2C1_Init();
 
   /* USER CODE BEGIN 2 */
-  sampleRate = HAL_RCC_GetPCLK2Freq() / PRESCALER_ADC();
+  // Obtener el valor del prescaler del ADC
+  uint32_t adc_prescaler = ((ADC->CCR & ADC_CCR_ADCPRE) >> ADC_CCR_ADCPRE_Pos);
+
+  // Convertir el prescaler a su valor divisor
+  uint32_t adc_div;
+  switch (adc_prescaler) {
+	  case 0: adc_div = 2; break;
+	  case 1: adc_div = 4; break;
+	  case 2: adc_div = 6; break;
+	  case 3: adc_div = 8; break;
+	  default: adc_div = 2; // Valor por defecto en caso de error
+  }
+
+  sampleRate = HAL_RCC_GetPCLK2Freq() / adc_div;
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
